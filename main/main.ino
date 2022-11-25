@@ -9,8 +9,8 @@
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 String item = "0";
-const char* ssid = "ChinaNet-2.4G-0DF0";
-const char* password = "ChinaNet@233";
+const char* ssid = "OnePlus 8";
+const char* password = "azertyui";
 WiFiServer server(80);
 
 #include <Wire.h>
@@ -45,8 +45,8 @@ int resolution_PWM = 10;
 const int PWM_Pin1 = 5;
 const int PWM_Pin2 = 13;
 
-
-
+int door_deg = 0;
+int door_diff = 0;
 
 void setup() {
   Serial.begin(115200);
@@ -134,16 +134,37 @@ void loop() {
     client.println("turn off the LED");
     digitalWrite(led_y, LOW);
   }
+    if(req == "/window/more"){
+    
+    door_diff += 5;
+    ledcWrite(channel_PWM, door_deg + door_diff);
+    client.println(door_diff);
+
+
+
+  }
+  if(req == "/window/less"){
+    
+    door_diff -= 5;
+    ledcWrite(channel_PWM, door_deg + door_diff);
+    client.println(door_diff);
+
+
+
+  }
+
   if(req == "/window/on")
   {
     client.println("open the window");
-    ledcWrite(channel_PWM, 100);  //The high level of 20ms is about 2.5ms, that is, 2.5/20*1024, at this time, the servo angle is 180°.  
+    ledcWrite(channel_PWM, 120);  //The high level of 20ms is about 2.5ms, that is, 2.5/20*1024, at this time, the servo angle is 180°.  
+    door_deg = 100;
     //Wservo.write(175);
   }
   if(req == "/window/off")
   {
     client.println("close the window");
     ledcWrite(channel_PWM, 60);  //The high level of 20ms is about 0.5ms，that is, 0.5/20*1024，at this time, the servo angle is 0°.
+    door_deg = 60;
     //Wservo.write(0);
   }
   if(req == "/music/on")
