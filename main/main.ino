@@ -1,12 +1,13 @@
 #include <WiFi.h>
 #include <ESPmDNS.h>
 #include <WiFiClient.h>
+
 #include <Adafruit_NeoPixel.h>
-#define LED_PIN    26
+#define NEO_PIXEL_PIN    26
 // How many NeoPixels are attached to the Arduino?
-#define LED_COUNT 4
+#define NEO_PIXEL_COUNT 4
 // Declare our NeoPixel strip object:
-Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel strip(NEO_PIXEL_COUNT, NEO_PIXEL_PIN, NEO_GRB + NEO_KHZ800);
 
 String item = "0";
 const char* ssid = "OnePlus 8";
@@ -23,17 +24,15 @@ xht11 xht(17);
 //Servo Wservo;
 //Servo Dservo;
 #include <ESP32Tone.h>
-#define buzzer_pin 25
+#define BUZZER_PIN 25
 //#define windowServo 5
 //#define doorServo 13
-#define waterPin 34
-#define fanPin1 19
-#define fanPin2 18
-#define led_y 12  //Define the yellow led pin to 12
-
-#define waterPin 34
-#define gasPin 23
-#define pyroelectric 14
+#define WATER_PIN 34
+#define FAN_PIN1 19
+#define FAN_PIN2 18
+#define Y_LED_PIN 12  //Define the yellow led pin to 12
+#define GAS_PIN 23
+#define PYRO_PIN 14
 
 unsigned char dht[4] = {0, 0, 0, 0};//Only the first 32 bits of data are received, not the parity bits
 
@@ -52,15 +51,15 @@ void setup() {
   Serial.begin(115200);
   mylcd.init();
   mylcd.backlight();
-  pinMode(led_y, OUTPUT);
-  pinMode(fanPin1, OUTPUT);
-  pinMode(fanPin2, OUTPUT);
+  pinMode(Y_LED_PIN, OUTPUT);
+  pinMode(FAN_PIN1, OUTPUT);
+  pinMode(FAN_PIN2, OUTPUT);
   ledcSetup(5, 1200, 8);//Set the frequency of LEDC channel 1 to 1200 and PWM resolution to 8, that is duty cycle to 256.  
-  ledcAttachPin(fanPin2, 5);  //Bind the LEDC channel 1 to the specified left motor pin GPIO26 for output.  
-  pinMode(waterPin, INPUT);
-  pinMode(buzzer_pin, OUTPUT);
-  pinMode(gasPin, INPUT);
-  pinMode(pyroelectric, INPUT);
+  ledcAttachPin(FAN_PIN2, 5);  //Bind the LEDC channel 1 to the specified left motor pin GPIO26 for output.  
+  pinMode(WATER_PIN, INPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(GAS_PIN, INPUT);
+  pinMode(PYRO_PIN, INPUT);
   ledcSetup(channel_PWM, freq_PWM, resolution_PWM); //Set servo channel and frequency as well as PWM resolution.
   ledcSetup(channel_PWM2, freq_PWM, resolution_PWM);
   ledcAttachPin(PWM_Pin1, channel_PWM);  //Binds the LEDC channel to the specified IO port for output
@@ -127,12 +126,12 @@ void loop() {
   if(req == "/led/on") //Browser accesses address ip address/led/on
   {
     client.println("turn on the LED");
-    digitalWrite(led_y, HIGH);
+    digitalWrite(Y_LED_PIN, HIGH);
   }
   if(req == "/led/off") //Browser accesses address ip address/led/off
   {
     client.println("turn off the LED");
-    digitalWrite(led_y, LOW);
+    digitalWrite(Y_LED_PIN, LOW);
   }
     if(req == "/window/more"){
     
@@ -175,18 +174,18 @@ void loop() {
   {
     client.println("play music");
     birthday();
-    noTone(buzzer_pin,0);
+    noTone(BUZZER_PIN,0);
   }
   if(req == "/buz/on")
   {
     client.println("buzzer");
-    tone(buzzer_pin,392,250,0);
+    tone(BUZZER_PIN,392,250,0);
     Serial.println("1");
   }
   if(req == "/buz/off")
   {
     client.println("off");
-    noTone(buzzer_pin,0);
+    noTone(BUZZER_PIN,0);
   }
   if(req == "/door/on")
   {
@@ -203,13 +202,13 @@ void loop() {
   if(req == "/fan/on")
   {
     client.println("turn on the fan");
-    digitalWrite(fanPin1, LOW); //pwm = 0
+    digitalWrite(FAN_PIN1, LOW); //pwm = 0
     ledcWrite(5, 100); //The LEDC channel 1 is bound to the specified left motor output PWM value of 100.
   }
   if(req == "/fan/off")
   {
     client.println("turn off the fan");
-    digitalWrite(fanPin1, LOW); //pwm = 0
+    digitalWrite(FAN_PIN1, LOW); //pwm = 0
     ledcWrite(5, 0); //The LEDC channel 1 is bound to the specified left motor output PWM value of 0.
   }
   if(req == "/red/on")
@@ -222,12 +221,12 @@ void loop() {
     client.println("red off");
     colorWipe(strip.Color(0,   0,   0), 50);
   }
-  if(req == "/oringe/on")
+  if(req == "/orange/on")
   {
     client.println("oringe on");
     colorWipe(strip.Color(200,   100,   0), 50);
   }
-  if(req == "/oringe/off")
+  if(req == "/orange/off")
   {
     client.println("oringe off");
     colorWipe(strip.Color(0,   0,   0), 50);
@@ -316,7 +315,7 @@ void loop() {
 
   if(req == "/rain/on")
   {
-    int rainVal = analogRead(waterPin);
+    int rainVal = analogRead(WATER_PIN);
     client.println(rainVal);
   }
   if(req == "/rain/off")
@@ -325,7 +324,7 @@ void loop() {
   }
   if(req == "/gas/on")
   {
-    boolean gasVal = analogRead(gasPin);
+    boolean gasVal = analogRead(GAS_PIN);
     if(gasVal == 0)
     {
       client.println("safety");
@@ -341,7 +340,7 @@ void loop() {
   }
   if(req == "/body/on")
   {
-    boolean pyroelectric_val = digitalRead(pyroelectric);
+    boolean pyroelectric_val = digitalRead(PYRO_PIN);
     if(pyroelectric_val == 1)
     {
       client.println("someone");
@@ -397,28 +396,28 @@ void loop() {
 
 void birthday()
 {
-  tone(buzzer_pin,294,250,0);  //The four parameters are pin, frequency, delay and channel 
-  tone(buzzer_pin,440,250,0);
-  tone(buzzer_pin,392,250,0);
-  tone(buzzer_pin,532,250,0);
-  tone(buzzer_pin,494,250,0);
-  tone(buzzer_pin,392,250,0);
-  tone(buzzer_pin,440,250,0);
-  tone(buzzer_pin,392,250,0);
-  tone(buzzer_pin,587,250,0);
-  tone(buzzer_pin,532,250,0);
-  tone(buzzer_pin,392,250,0);
-  tone(buzzer_pin,784,250,0);
-  tone(buzzer_pin,659,250,0);
-  tone(buzzer_pin,532,250,0);
-  tone(buzzer_pin,494,250,0);
-  tone(buzzer_pin,440,250,0);
-  tone(buzzer_pin,698,250,0);
-  tone(buzzer_pin,659,250,0);
-  tone(buzzer_pin,532,250,0);
-  tone(buzzer_pin,587,250,0);
-  tone(buzzer_pin,532,500,0);
-  noTone(buzzer_pin,0);  //关闭
+  tone(BUZZER_PIN,294,250,0);  //The four parameters are pin, frequency, delay and channel 
+  tone(BUZZER_PIN,440,250,0);
+  tone(BUZZER_PIN,392,250,0);
+  tone(BUZZER_PIN,532,250,0);
+  tone(BUZZER_PIN,494,250,0);
+  tone(BUZZER_PIN,392,250,0);
+  tone(BUZZER_PIN,440,250,0);
+  tone(BUZZER_PIN,392,250,0);
+  tone(BUZZER_PIN,587,250,0);
+  tone(BUZZER_PIN,532,250,0);
+  tone(BUZZER_PIN,392,250,0);
+  tone(BUZZER_PIN,784,250,0);
+  tone(BUZZER_PIN,659,250,0);
+  tone(BUZZER_PIN,532,250,0);
+  tone(BUZZER_PIN,494,250,0);
+  tone(BUZZER_PIN,440,250,0);
+  tone(BUZZER_PIN,698,250,0);
+  tone(BUZZER_PIN,659,250,0);
+  tone(BUZZER_PIN,532,250,0);
+  tone(BUZZER_PIN,587,250,0);
+  tone(BUZZER_PIN,532,500,0);
+  noTone(BUZZER_PIN,0);  //关闭
 }
 
 void colorWipe(uint32_t color, int wait) {
