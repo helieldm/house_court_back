@@ -1,40 +1,43 @@
 #include <WiFi.h>
 #include <ESPmDNS.h>
 #include <WiFiClient.h>
-
-#include <Adafruit_NeoPixel.h>
-#define NEO_PIXEL_PIN    26
-// How many NeoPixels are attached to the Arduino?
-#define NEO_PIXEL_COUNT 4
-// Declare our NeoPixel strip object:
-Adafruit_NeoPixel strip(NEO_PIXEL_COUNT, NEO_PIXEL_PIN, NEO_GRB + NEO_KHZ800);
-
-String item = "0";
-const char* ssid = "OnePlus 8";
-const char* password = "azertyui";
-WiFiServer server(80);
-
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
-LiquidCrystal_I2C mylcd(0x27,16,2);
+#include <Adafruit_NeoPixel.h>
 #include <analogWrite.h>
 #include "xht11.h"
-xht11 xht(17);
-//#include <ESP32_Servo.h>
-//Servo Wservo;
-//Servo Dservo;
 #include <ESP32Tone.h>
+// #include <ESP32_Servo.h>
+
 #define BUZZER_PIN 25
-//#define windowServo 5
-//#define doorServo 13
+//#define WINDOW_S_PIN 5 // Window ervo pin
+//#define WINDOW_D_PIN 13 // Door servo pin
 #define WATER_PIN 34
 #define FAN_PIN1 19
 #define FAN_PIN2 18
 #define Y_LED_PIN 12  //Define the yellow led pin to 12
 #define GAS_PIN 23
 #define PYRO_PIN 14
+#define NEO_PIXEL_PIN 26
+#define NEO_PIXEL_COUNT 4
 
+// Declare our NeoPixel strip object:
+Adafruit_NeoPixel strip(NEO_PIXEL_COUNT, NEO_PIXEL_PIN, NEO_GRB + NEO_KHZ800);
+
+// Create the server object on the http port, and define the ssid and pw of our network interface
+WiFiServer server(80); 
+const char* SSID = "OnePlus 8"; 
+const char* PASSWORD = "azertyui";
+
+// Screen and humidity detector
+LiquidCrystal_I2C mylcd(0x27,16,2); // I2C address is 0x27, 16 char long, 2 lines
+
+// okay so xht is the chinese lib that communicates with the dht11............ 
+xht11 xht(17); // pin 17 
 unsigned char dht[4] = {0, 0, 0, 0};//Only the first 32 bits of data are received, not the parity bits
+
+//Servo Wservo;
+//Servo Dservo;
 
 //Servo channel
 int channel_PWM = 13;
@@ -64,8 +67,8 @@ void setup() {
   ledcSetup(channel_PWM2, freq_PWM, resolution_PWM);
   ledcAttachPin(PWM_Pin1, channel_PWM);  //Binds the LEDC channel to the specified IO port for output
   ledcAttachPin(PWM_Pin2, channel_PWM2);  //Binds the LEDC channel to the specified IO port for output
-//  Wservo.attach(windowServo);
-//  Dservo.attach(doorServo);
+//  Wservo.attach(WINDOW_S_PIN);
+//  Dservo.attach(WINDOW_D_PIN);
 //  #if defined(__AVR_ATtiny85__) && (F_CPU == 16000000)
 //    clock_prescale_set(clock_div_1);
 //  #endif
@@ -74,14 +77,14 @@ void setup() {
 //  strip.show();            // Turn OFF all pixels ASAP
 //  strip.setBrightness(50); // Set BRIGHTNESS to about 1/5 (max = 255)
   
-  WiFi.begin(ssid, password);
+  WiFi.begin(SSID, PASSWORD);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
   Serial.println("");
   Serial.print("Connected to ");
-  Serial.println(ssid);
+  Serial.println(SSID);
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
   server.begin();
@@ -110,14 +113,14 @@ void loop() {
       return;
   }
   req = req.substring(addr_start + 1, addr_end);
-  item=req;
-  Serial.println(item);
+  Serial.println(req);  // WARNING : removed weird string assignation, to check when we actually get to test with the house
+
   String s;
   if (req == "/")  //Browser accesses address can read the information sent by the client.println(s);
   {
       IPAddress ip = WiFi.localIP();
       String ipStr = String(ip[0]) + '.' + String(ip[1]) + '.' + String(ip[2]) + '.' + String(ip[3]);
-      s = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<!DOCTYPE HTML>\r\n<html>ESP32 ip:";
+      s = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<!DOCTYPE HTML>\r\n<html>ESP32 ip:"; // this is disgusting
       s += ipStr;
       s += "</html>\r\n\r\n";
       Serial.println("Sending 200");
