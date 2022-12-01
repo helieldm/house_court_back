@@ -6,6 +6,8 @@
 #include <LiquidCrystal_I2C.h>
 #include "DHT.h"
 
+#define CONNECTION_TIMEOUT 10
+
 #define BUZZER_PIN 25
 
 #define WATER_PIN 34
@@ -20,8 +22,8 @@
 // Web server running on port 80
 WebServer server(80);
 
-const char *SSID = "OnePlus 8";
-const char *PWD = "azertyui";
+const char *SSID = "DESKTOP-97OMHOF 2648";
+const char *PWD = "L613s3%4";
 
 StaticJsonDocument<250> jsonDocument;
 char buffer[250];
@@ -52,14 +54,20 @@ float humidity;
 void connectToWiFi() {
   Serial.print("Connecting to ");
   Serial.println(SSID);
+
+  int timeout_counter = 0;
   
-  //WiFi.mode(WIFI_STA);
+  WiFi.mode(WIFI_STA);
+
   WiFi.begin(SSID, PWD);
   
   while (WiFi.status() != WL_CONNECTED) {
     Serial.print(".");
     delay(500);
-    // we can even make the ESP32 to sleep
+    timeout_counter++;
+    if(timeout_counter >= CONNECTION_TIMEOUT*2){
+      ESP.restart();
+    }
   }
  
   Serial.print("Connected. IP: ");
@@ -126,6 +134,44 @@ void getHumidity() {
   server.send(200, "application/json", buffer);
 }
 
+void openWindow() {
+    Serial.println("Open the window");
+    ledcWrite(channel_PWM, 120);  //The high level of 20ms is about 2.5ms, that is, 2.5/20*1024, at this time, the servo angle is 180°.  
+    door_deg = 100;
+    jsonDocument.clear();
+    jsonDocument["windowState"] = "opened";
+    serializeJson(jsonDocument, buffer);
+    server.send(200, "application/json", buffer);
+}
+
+void closeWindow() {
+    Serial.println("Closed the window");
+    ledcWrite(channel_PWM, 60);  //The high level of 20ms is about 2.5ms, that is, 2.5/20*1024, at this time, the servo angle is 180°.  
+    door_deg = 60;
+    jsonDocument.clear();
+    jsonDocument["windowState"] = "closed";
+    serializeJson(jsonDocument, buffer);
+    server.send(200, "application/json", buffer);
+}
+
+void openDoor() {
+    Serial.println("Open the door");
+    ledcWrite(channel_PWM2, 120);
+    jsonDocument.clear();
+    jsonDocument["doorState"] = "opened";
+    serializeJson(jsonDocument, buffer);
+    server.send(200, "application/json", buffer);
+}
+
+void closeDoor() {
+    Serial.println("Close the door");
+    ledcWrite(channel_PWM2, 20);
+    jsonDocument.clear();
+    jsonDocument["doorState"] = "closed";
+    serializeJson(jsonDocument, buffer);
+    server.send(200, "application/json", buffer);
+}
+
 void getEnv() {
   Serial.println("Get env");
   jsonDocument.clear();
@@ -149,7 +195,11 @@ void handlePost() {
 void setup_routing() {	 	 
   server.on("/temperature", getTemperature);	 	  	 
   server.on("/humidity", getHumidity);	 	 
-  server.on("/env", getEnv);	 	 
+  server.on("/env", getEnv);
+  server.on("/window/open", openWindow);
+  server.on("/window/close", closeWindow);
+  server.on("/door/open", openDoor);
+  server.on("/door/close", closeDoor);
   server.on("/led", HTTP_POST, handlePost);	 	 
   	 	 
   // start server	 	 
