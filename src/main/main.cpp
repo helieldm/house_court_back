@@ -22,8 +22,8 @@
 // Web server running on port 80
 WebServer server(80);
 
-const char *SSID = "DESKTOP-97OMHOF 2648";
-const char *PWD = "L613s3%4";
+const char *SSID = "Helie";
+const char *PWD = "Proutprout";
 
 StaticJsonDocument<250> jsonDocument;
 char buffer[250];
