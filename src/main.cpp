@@ -6,6 +6,8 @@
 #include <LiquidCrystal_I2C.h>
 #include "DHT.h"
 
+#include "led.h"
+
 #define CONNECTION_TIMEOUT 10
 
 #define BUZZER_PIN 25
@@ -22,8 +24,8 @@
 // Web server running on port 80
 WebServer server(80);
 
-const char *SSID = "DESKTOP-97OMHOF 2648";
-const char *PWD = "L613s3%4";
+const char *SSID = "Helie";
+const char *PWD = "Proutprout";
 
 StaticJsonDocument<250> jsonDocument;
 char buffer[250];
@@ -45,11 +47,12 @@ const int PWM_Pin1 = 5;
 const int PWM_Pin2 = 13;
 
 int door_deg = 0;
-int door_diff = 0;
 
 // env variable
 float temperature;
 float humidity;
+
+Led y_led = Led(Y_LED_PIN);
 
 void connectToWiFi() {
   Serial.print("Connecting to ");
@@ -65,7 +68,7 @@ void connectToWiFi() {
     Serial.print(".");
     delay(500);
     timeout_counter++;
-    if(timeout_counter >= CONNECTION_TIMEOUT*2){
+    if(timeout_counter >= CONNECTION_TIMEOUT*6){
       ESP.restart();
     }
   }
@@ -181,7 +184,7 @@ void getEnv() {
   server.send(200, "application/json", buffer);
 }
 
-void handlePost() {
+void handleLed() {
   if (server.hasArg("plain") == false) {
     //handle error here
   }
@@ -200,7 +203,7 @@ void setup_routing() {
   server.on("/window/close", closeWindow);
   server.on("/door/open", openDoor);
   server.on("/door/close", closeDoor);
-  server.on("/led", HTTP_POST, handlePost);	 	 
+  server.on("/led", HTTP_POST, handleLed);	 	 
   	 	 
   // start server	 	 
   server.begin();	 	 
@@ -238,4 +241,6 @@ void setup() {
 
 void loop() {
   server.handleClient();
+  y_led.toggle();
+  delay(1000);
 }
