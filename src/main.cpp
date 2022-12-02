@@ -5,8 +5,9 @@
 #include <Adafruit_NeoPixel.h>
 #include <LiquidCrystal_I2C.h>
 #include "DHT.h"
-
+// Our classes
 #include "led.h"
+#include "myStrip.h"
 
 #define CONNECTION_TIMEOUT 10
 
@@ -30,9 +31,6 @@ const char *PWD = "Proutprout";
 StaticJsonDocument<250> jsonDocument;
 char buffer[250];
 
-// Declare our NeoPixel strip object:
-Adafruit_NeoPixel strip(NEO_PIXEL_COUNT, NEO_PIXEL_PIN, NEO_GRB + NEO_KHZ800);
-
 // Screen and humidity detector
 LiquidCrystal_I2C mylcd(0x27,16,2); // I2C address is 0x27, 16 char long, 2 lines
 
@@ -51,6 +49,8 @@ int door_deg = 0;
 // env variable
 float temperature;
 float humidity;
+
+MyStrip strip(NEO_PIXEL_COUNT, NEO_PIXEL_PIN, NEO_GRB + NEO_KHZ800);
 
 Led y_led = Led(Y_LED_PIN);
 
@@ -93,7 +93,7 @@ void add_json_object(char *tag, float value, char *unit) {
   obj["unit"] = unit; 
 }
 
-void read_sensor_data(void * parameter) {
+void read_dht(void * parameter) {
    for (;;) {
      Serial.println("Read sensor data");
 
@@ -116,7 +116,7 @@ void read_sensor_data(void * parameter) {
 
 void setup_task() {	 	 
   xTaskCreate(	 	 
-  read_sensor_data, 	 	 
+  read_dht, 	 	 
   "Read sensor data", 	 	 
   1000, 	 	 
   NULL, 	 	 
@@ -195,6 +195,16 @@ void handleLed() {
   server.send(200, "application/json", "{}");
 }
 
+void color_wipe() {
+  if (server.hasArg("plain") == false) {
+    server.send(405, "text/plain", "No params found");
+  }
+  String body = server.arg("plain");
+  deserializeJson(jsonDocument, body);
+  Serial.println(body);
+  // strip.colorWipe(rgb, wait);
+}
+
 void setup_routing() {	 	 
   server.on("/temperature", getTemperature);	 	  	 
   server.on("/humidity", getHumidity);	 	 
@@ -203,7 +213,8 @@ void setup_routing() {
   server.on("/window/close", closeWindow);
   server.on("/door/open", openDoor);
   server.on("/door/close", closeDoor);
-  server.on("/led", HTTP_POST, handleLed);	 	 
+  server.on("/led", HTTP_POST, handleLed);
+  server.on("/strip", HTTP_POST, color_wipe);
   	 	 
   // start server	 	 
   server.begin();	 	 
@@ -227,6 +238,11 @@ void setup() {
   ledcAttachPin(PWM_Pin1, channel_PWM);  //Binds the LEDC channel to the specified IO port for output
   ledcAttachPin(PWM_Pin2, channel_PWM2);  //Binds the LEDC channel to the specified IO port for output
 
+
+  strip.begin();           // INITIALIZE NeoPixel strip object (REQUIRED)
+  strip.show();            // Turn OFF all pixels ASAP
+  strip.setBrightness(50); // Set BRIGHTNESS to about 1/5 (max = 255)
+
   dht.begin(); 
 
   mylcd.setCursor(0, 0);
@@ -236,11 +252,21 @@ void setup() {
   connectToWiFi(); 
   setup_task();	 	 
   setup_routing(); 	 	 
+  strip.begin();
+  strip.show();
+  strip.setBrightness(50);
+  strip.setPixelColor(0, strip.Color(251,0,0));
 
 }
 
 void loop() {
   server.handleClient();
   y_led.toggle();
-  delay(1000);
+  int red[] = {255, 0, 0};
+  int blue[] = {0, 255, 0};
+  //strip.colorWipe(red, 50);
+  delay(500);
+  //strip.colorWipe(blue, 50);
+  //strip.setPixelColor(0, strip.Color(251,0,0));
+  delay(500);
 }
