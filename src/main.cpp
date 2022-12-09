@@ -5,6 +5,7 @@
 #include <Adafruit_NeoPixel.h>
 #include <LiquidCrystal_I2C.h>
 #include "DHT.h"
+#include <esp_websocket_client.h>
 // Our classes
 #include "led.h"
 #include "myStrip.h"
@@ -220,6 +221,13 @@ void setup_routing() {
   server.begin();	 	 
 }
 
+
+const esp_websocket_client_config_t ws_cfg = {
+    .uri = "wss://192.168.75.54",
+    .port = 7023
+};
+esp_websocket_client_handle_t ws_cli;
+
 void setup() {
   Serial.begin(115200);
   mylcd.init();
@@ -238,7 +246,6 @@ void setup() {
   ledcAttachPin(PWM_Pin1, channel_PWM);  //Binds the LEDC channel to the specified IO port for output
   ledcAttachPin(PWM_Pin2, channel_PWM2);  //Binds the LEDC channel to the specified IO port for output
 
-
   strip.begin();           // INITIALIZE NeoPixel strip object (REQUIRED)
   strip.show();            // Turn OFF all pixels ASAP
   strip.setBrightness(50); // Set BRIGHTNESS to about 1/5 (max = 255)
@@ -252,9 +259,14 @@ void setup() {
   connectToWiFi(); 
   setup_task();	 	 
   setup_routing(); 	 	 
+
+  // Setup websocket
+  ws_cli = esp_websocket_client_init(&ws_cfg);
+  esp_websocket_client_start(ws_cli);
+
   strip.begin();
   strip.show();
-  strip.setBrightness(50);
+  strip.setBrightness(25);
   strip.setPixelColor(0, strip.Color(251,0,0));
 
 }
@@ -262,11 +274,17 @@ void setup() {
 void loop() {
   server.handleClient();
   y_led.toggle();
-  int red[] = {255, 0, 0};
-  int blue[] = {0, 255, 0};
-  //strip.colorWipe(red, 50);
+  strip.rainbow(10);
+  uint32_t red = strip.Color(0,0,255);
+  uint32_t green = strip.Color(0,0,255);
+  uint32_t blue = strip.Color(0,0,255);
   delay(500);
-  //strip.colorWipe(blue, 50);
-  //strip.setPixelColor(0, strip.Color(251,0,0));
+  strip.colorWipe(blue, 50);
+  strip.setPixelColor(0, strip.Color(251,0,0));
+  strip.show();
+  
+
+  esp_websocket_client_send_text(ws_cli, "hahahihia", 10, 10000);
   delay(500);
-}
+
+}   

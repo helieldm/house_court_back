@@ -8,10 +8,7 @@ class MyStrip: public Adafruit_NeoPixel {
 
 public:
 
-
     void colorWipe(uint32_t color, int wait);
-
-    void colorWipe(uint32_t rgb[3], int wait);
-
+    void rainbow(int wait);
 
 };

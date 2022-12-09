@@ -16,12 +16,13 @@ void MyStrip::colorWipe(uint32_t color, int wait){
     }
 }
 
-void MyStrip::colorWipe(uint32_t rgb[], int wait){
-    if (rgb == nullptr) {
-        return colorWipe(Color(0, 0, 0), wait);
+void MyStrip::rainbow(int wait) {
+    for(long firstPixelHue = 0; firstPixelHue < 5*65536; firstPixelHue += 256) {
+    for(int i=0; i<numPixels(); i++) { // For each pixel in strip...
+      int pixelHue = firstPixelHue + (i * 65536L / numPixels());
+      setPixelColor(i, gamma32(ColorHSV(pixelHue)));
     }
-    else if (myArrLen(rgb) != 3){
-        return colorWipe(Color(0, 0, 0), wait);
-    }
-    return colorWipe(Color(rgb[0], rgb[1], rgb[2]), wait);   
+    show(); // Update strip with new contents
+    delay(wait);  // Pause for a moment
+  }
 }

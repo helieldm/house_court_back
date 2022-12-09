@@ -2,13 +2,11 @@
 
 void Led::on() {
     digitalWrite(pin, HIGH);
-    Serial.println("turn on the LED");
     flag = true;
 }
 
 void Led::off() {
     digitalWrite(pin, LOW);
-    Serial.println("turn off the LED");
     flag = false;
 }
 
