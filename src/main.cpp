@@ -6,10 +6,11 @@
 #include <LiquidCrystal_I2C.h>
 #include "DHT.h"
 #include <esp_websocket_client.h>
+#include <time.h>
+
 // Our classes
 #include "led.h"
 #include "myStrip.h"
-
 #define CONNECTION_TIMEOUT 10
 
 #define BUZZER_PIN 25
@@ -22,6 +23,8 @@
 #define PYRO_PIN 14
 #define NEO_PIXEL_PIN 26
 #define NEO_PIXEL_COUNT 4
+
+void destroy();
 
 // Web server running on port 80
 WebServer server(80);
@@ -70,6 +73,7 @@ void connectToWiFi() {
     delay(500);
     timeout_counter++;
     if(timeout_counter >= CONNECTION_TIMEOUT*6){
+      destroy();
       ESP.restart();
     }
   }
@@ -94,6 +98,24 @@ void add_json_object(char *tag, float value, char *unit) {
   obj["unit"] = unit; 
 }
 
+void led_loop(void *p) {
+    while(true){
+      y_led.toggle();
+      vTaskDelay(500 / portTICK_PERIOD_MS);
+    }; 
+  }
+
+void led_task() {
+  xTaskCreate(
+    led_loop,
+    "Toggle led", 	 	 
+    1000, 	 	 
+    NULL, 	 	 
+    1, 	 	 
+    NULL 	 
+    );
+}
+
 void read_dht(void * parameter) {
    for (;;) {
      Serial.println("Read sensor data");
@@ -115,7 +137,7 @@ void read_dht(void * parameter) {
    }
 }
 
-void setup_task() {	 	 
+void dht_task() {	 	 
   xTaskCreate(	 	 
   read_dht, 	 	 
   "Read sensor data", 	 	 
@@ -223,12 +245,18 @@ void setup_routing() {
 
 
 const esp_websocket_client_config_t ws_cfg = {
-    .uri = "wss://192.168.75.54",
+    .uri = "wss://192.168.248.147",
     .port = 7023
 };
 esp_websocket_client_handle_t ws_cli;
 
+time_t curr_time;
+time_t setup_time;
+
 void setup() {
+
+  time(&setup_time);
+
   Serial.begin(115200);
   mylcd.init();
   mylcd.backlight();
@@ -257,12 +285,13 @@ void setup() {
   mylcd.setCursor(0, 1); 	
 
   connectToWiFi(); 
-  setup_task();	 	 
+  dht_task();
+  led_task();
   setup_routing(); 	 	 
 
   // Setup websocket
-  ws_cli = esp_websocket_client_init(&ws_cfg);
-  esp_websocket_client_start(ws_cli);
+  //ws_cli = esp_websocket_client_init(&ws_cfg);
+  //esp_websocket_client_start(ws_cli);
 
   strip.begin();
   strip.show();
@@ -272,19 +301,34 @@ void setup() {
 }
 
 void loop() {
+
+  //time(&curr_time);
+
   server.handleClient();
-  y_led.toggle();
   strip.rainbow(10);
   uint32_t red = strip.Color(0,0,255);
   uint32_t green = strip.Color(0,0,255);
   uint32_t blue = strip.Color(0,0,255);
-  delay(500);
-  strip.colorWipe(blue, 50);
-  strip.setPixelColor(0, strip.Color(251,0,0));
-  strip.show();
+
+  long diff = difftime(curr_time, setup_time); 
+
+  Serial.println("diff: " + String(diff));
+  /*if(diff%500 < 25 || diff%500 > 475){ // in range of 25 above and under
+    strip.colorWipe(blue, 50);
+    strip.setPixelColor(0, strip.Color(251,0,0));
+    strip.show();  
+    y_led.toggle();
+      
+
+  };*/
   
 
-  esp_websocket_client_send_text(ws_cli, "hahahihia", 10, 10000);
-  delay(500);
+  //esp_websocket_client_send_text(ws_cli, "hahahihia", 10, 10000);
 
 }   
+
+void destroy() {
+  esp_websocket_client_stop(ws_cli);
+  esp_websocket_client_destroy(ws_cli);
+  WiFi.disconnect();
+}
