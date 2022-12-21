@@ -26,14 +26,23 @@
 
 void destroy();
 
-// Web server running on port 80
-WebServer server(80);
+const char* SSID = "IOT";
+const char* PWD = "40718804";
 
-const char *SSID = "Helie";
-const char *PWD = "Proutprout";
+const char* BEGIN = "BEGIN";
+const char* END = "END";
+const char* SEP = ";";
+const char* DHT_STR = "DHT";
 
-StaticJsonDocument<250> jsonDocument;
-char buffer[250];
+const esp_websocket_client_config_t ws_cfg = {
+  .uri = "ws://192.168.0.100:5196",
+};
+
+esp_websocket_client_handle_t ws_cli;
+esp_event_handler_t wsHandler;
+
+time_t curr_time;
+time_t setup_time;
 
 // Screen and humidity detector
 LiquidCrystal_I2C mylcd(0x27,16,2); // I2C address is 0x27, 16 char long, 2 lines
@@ -50,9 +59,9 @@ const int PWM_Pin2 = 13;
 
 int door_deg = 0;
 
-// env variable
-float temperature;
-float humidity;
+String temperature="";
+String humiidity="";
+String reading="";
 
 MyStrip strip(NEO_PIXEL_COUNT, NEO_PIXEL_PIN, NEO_GRB + NEO_KHZ800);
 
@@ -63,6 +72,7 @@ void connectToWiFi() {
   Serial.println(SSID);
 
   int timeout_counter = 0;
+  int status = WL_IDLE_STATUS;
   
   WiFi.mode(WIFI_STA);
 
@@ -70,6 +80,7 @@ void connectToWiFi() {
   
   while (WiFi.status() != WL_CONNECTED) {
     Serial.print(".");
+    status = WiFi.status();
     delay(500);
     timeout_counter++;
     if(timeout_counter >= CONNECTION_TIMEOUT*6){
@@ -81,21 +92,6 @@ void connectToWiFi() {
   Serial.print("Connected. IP: ");
   Serial.println(WiFi.localIP());
   mylcd.print(WiFi.localIP());
-}
-
-void create_json(char *tag, float value, char *unit) {  
-  jsonDocument.clear();  
-  jsonDocument["type"] = tag;
-  jsonDocument["value"] = value;
-  jsonDocument["unit"] = unit;
-  serializeJson(jsonDocument, buffer);
-}
-
-void add_json_object(char *tag, float value, char *unit) {
-  JsonObject obj = jsonDocument.createNestedObject();
-  obj["type"] = tag;
-  obj["value"] = value;
-  obj["unit"] = unit; 
 }
 
 void led_loop(void *p) {
@@ -117,22 +113,20 @@ void led_task() {
 }
 
 void read_dht(void * parameter) {
-   for (;;) {
-     Serial.println("Read sensor data");
+   while(true){
+    humiidity = String(dht.readHumidity());
+    temperature = String(dht.readTemperature());
 
-     humidity = dht.readHumidity();
+    reading = "BEGIN;"+ WiFi.macAddress() + ";DHT;" + humiidity + ";" + temperature + ";END";
 
-     temperature = dht.readTemperature();
+    esp_websocket_client_send(ws_cli,reading.c_str(),reading.length(),2000);
 
+    Serial.print( "fAlarm " );
+    Serial.print(uxTaskGetStackHighWaterMark( NULL ));
+    Serial.println();
+    Serial.flush();
 
-     Serial.println("Temperature : ");
-     Serial.println(temperature);
-
-     Serial.println("Humidity : ");
-     Serial.println(humidity);
-
- 
-     // delay the task
+    // delay the task
      vTaskDelay(60000 / portTICK_PERIOD_MS);
    }
 }
@@ -141,123 +135,70 @@ void dht_task() {
   xTaskCreate(	 	 
   read_dht, 	 	 
   "Read sensor data", 	 	 
-  1000, 	 	 
+  2000, 	 	 
   NULL, 	 	 
   1, 	 	 
   NULL 	 	 
   );	 	 
 }
 
-void getTemperature() {
-  Serial.println("Get temperature");
-  create_json("temperature", temperature, "°C");
-  server.send(200, "application/json", buffer);
-}
- 
-void getHumidity() {
-  Serial.println("Get humidity");
-  create_json("humidity", humidity, "%");
-  server.send(200, "application/json", buffer);
-}
-
 void openWindow() {
     Serial.println("Open the window");
     ledcWrite(channel_PWM, 120);  //The high level of 20ms is about 2.5ms, that is, 2.5/20*1024, at this time, the servo angle is 180°.  
     door_deg = 100;
-    jsonDocument.clear();
-    jsonDocument["windowState"] = "opened";
-    serializeJson(jsonDocument, buffer);
-    server.send(200, "application/json", buffer);
 }
 
 void closeWindow() {
     Serial.println("Closed the window");
     ledcWrite(channel_PWM, 60);  //The high level of 20ms is about 2.5ms, that is, 2.5/20*1024, at this time, the servo angle is 180°.  
     door_deg = 60;
-    jsonDocument.clear();
-    jsonDocument["windowState"] = "closed";
-    serializeJson(jsonDocument, buffer);
-    server.send(200, "application/json", buffer);
 }
 
 void openDoor() {
     Serial.println("Open the door");
     ledcWrite(channel_PWM2, 120);
-    jsonDocument.clear();
-    jsonDocument["doorState"] = "opened";
-    serializeJson(jsonDocument, buffer);
-    server.send(200, "application/json", buffer);
 }
 
 void closeDoor() {
     Serial.println("Close the door");
     ledcWrite(channel_PWM2, 20);
-    jsonDocument.clear();
-    jsonDocument["doorState"] = "closed";
-    serializeJson(jsonDocument, buffer);
-    server.send(200, "application/json", buffer);
 }
 
-void getEnv() {
-  Serial.println("Get env");
-  jsonDocument.clear();
-  add_json_object("temperature", temperature, "°C");
-  add_json_object("humidity", humidity, "%");
-  serializeJson(jsonDocument, buffer);
-  server.send(200, "application/json", buffer);
-}
-
-void handleLed() {
-  if (server.hasArg("plain") == false) {
-    //handle error here
+void handleMessage(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data){
+  esp_websocket_event_data_t *data = (esp_websocket_event_data_t *)event_data;
+  char * message = (char *)data->data_ptr;
+  if (strcmp(message,""))
+  {
+    Serial.print("Data received length : ");
+    Serial.println(data->data_len);
+    Serial.print("Data received : ");
+    Serial.println((char *)data->data_ptr);
   }
-  String body = server.arg("plain");
-  deserializeJson(jsonDocument, body);
+}
+
+void configWebsocket(){
+    // Setup websocket
+    ws_cli = esp_websocket_client_init(&ws_cfg);
+    esp_websocket_client_start(ws_cli);
+
+    wsHandler = esp_event_handler_t(handleMessage);
+    
+    esp_websocket_register_events(ws_cli,WEBSOCKET_EVENT_DATA, wsHandler, (void *)ws_cli);
+    
+    String init = "BEGIN;" + WiFi.macAddress() + ";REGISTER;END";
   
-  // Respond to the client
-  server.send(200, "application/json", "{}");
+    esp_websocket_client_send(ws_cli,init.c_str(),init.length(),2000);
+
 }
-
-void color_wipe() {
-  if (server.hasArg("plain") == false) {
-    server.send(405, "text/plain", "No params found");
-  }
-  String body = server.arg("plain");
-  deserializeJson(jsonDocument, body);
-  Serial.println(body);
-  // strip.colorWipe(rgb, wait);
-}
-
-void setup_routing() {	 	 
-  server.on("/temperature", getTemperature);	 	  	 
-  server.on("/humidity", getHumidity);	 	 
-  server.on("/env", getEnv);
-  server.on("/window/open", openWindow);
-  server.on("/window/close", closeWindow);
-  server.on("/door/open", openDoor);
-  server.on("/door/close", closeDoor);
-  server.on("/led", HTTP_POST, handleLed);
-  server.on("/strip", HTTP_POST, color_wipe);
-  	 	 
-  // start server	 	 
-  server.begin();	 	 
-}
-
-
-const esp_websocket_client_config_t ws_cfg = {
-    .uri = "wss://192.168.248.147",
-    .port = 7023
-};
-esp_websocket_client_handle_t ws_cli;
-
-time_t curr_time;
-time_t setup_time;
 
 void setup() {
 
   time(&setup_time);
 
   Serial.begin(115200);
+
+  delay(1000);
+
   mylcd.init();
   mylcd.backlight();
   pinMode(Y_LED_PIN, OUTPUT);
@@ -274,10 +215,6 @@ void setup() {
   ledcAttachPin(PWM_Pin1, channel_PWM);  //Binds the LEDC channel to the specified IO port for output
   ledcAttachPin(PWM_Pin2, channel_PWM2);  //Binds the LEDC channel to the specified IO port for output
 
-  strip.begin();           // INITIALIZE NeoPixel strip object (REQUIRED)
-  strip.show();            // Turn OFF all pixels ASAP
-  strip.setBrightness(50); // Set BRIGHTNESS to about 1/5 (max = 255)
-
   dht.begin(); 
 
   mylcd.setCursor(0, 0);
@@ -285,13 +222,9 @@ void setup() {
   mylcd.setCursor(0, 1); 	
 
   connectToWiFi(); 
+  configWebsocket();
   dht_task();
-  led_task();
-  setup_routing(); 	 	 
-
-  // Setup websocket
-  //ws_cli = esp_websocket_client_init(&ws_cfg);
-  //esp_websocket_client_start(ws_cli);
+  led_task(); 	 
 
   strip.begin();
   strip.show();
@@ -301,30 +234,7 @@ void setup() {
 }
 
 void loop() {
-
-  //time(&curr_time);
-
-  server.handleClient();
   strip.rainbow(10);
-  uint32_t red = strip.Color(0,0,255);
-  uint32_t green = strip.Color(0,0,255);
-  uint32_t blue = strip.Color(0,0,255);
-
-  long diff = difftime(curr_time, setup_time); 
-
-  Serial.println("diff: " + String(diff));
-  /*if(diff%500 < 25 || diff%500 > 475){ // in range of 25 above and under
-    strip.colorWipe(blue, 50);
-    strip.setPixelColor(0, strip.Color(251,0,0));
-    strip.show();  
-    y_led.toggle();
-      
-
-  };*/
-  
-
-  //esp_websocket_client_send_text(ws_cli, "hahahihia", 10, 10000);
-
 }   
 
 void destroy() {
