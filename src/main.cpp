@@ -62,6 +62,7 @@ int door_deg = 0;
 String temperature="";
 String humiidity="";
 String reading="";
+String keepAlive="";
 
 MyStrip strip(NEO_PIXEL_COUNT, NEO_PIXEL_PIN, NEO_GRB + NEO_KHZ800);
 
@@ -117,7 +118,7 @@ void read_dht(void * parameter) {
     humiidity = String(dht.readHumidity());
     temperature = String(dht.readTemperature());
 
-    reading = "BEGIN;"+ WiFi.macAddress() + ";DHT;" + humiidity + ";" + temperature + ";END";
+    reading = "BEGIN;"+ WiFi.macAddress() + ";DHT;" + humiidity + ";" + temperature + ";END\0";
 
     esp_websocket_client_send(ws_cli,reading.c_str(),reading.length(),2000);
 
@@ -131,10 +132,30 @@ void read_dht(void * parameter) {
    }
 }
 
+void keep_alive(void * parameter) {
+  keepAlive = "BEGIN;"+ WiFi.macAddress() + ";END\0";
+  while(true){
+    esp_websocket_client_send(ws_cli,keepAlive.c_str(),keepAlive.length(),2000);
+    // delay the task
+     vTaskDelay(1000 / portTICK_PERIOD_MS);
+  }
+}
+
 void dht_task() {	 	 
   xTaskCreate(	 	 
   read_dht, 	 	 
   "Read sensor data", 	 	 
+  2000, 	 	 
+  NULL, 	 	 
+  1, 	 	 
+  NULL 	 	 
+  );	 	 
+}
+
+void keep_alive_task() {	 	 
+  xTaskCreate(	 	 
+  keep_alive, 	 	 
+  "Keep alive", 	 	 
   2000, 	 	 
   NULL, 	 	 
   1, 	 	 
@@ -155,13 +176,33 @@ void closeWindow() {
 }
 
 void openDoor() {
+    // TODO : On arrive bien la mais la porte s'ouvre pas 
     Serial.println("Open the door");
     ledcWrite(channel_PWM2, 120);
 }
 
 void closeDoor() {
+    // TODO : On arrive bien la mais la porte se ferme pas 
     Serial.println("Close the door");
     ledcWrite(channel_PWM2, 20);
+}
+
+void fanOn() {
+    digitalWrite(FAN_PIN1, LOW); //pwm = 0
+    ledcWrite(5, 100); //The LEDC channel 1 is bound to the specified left motor output PWM value of 100.
+}
+
+void fanOff(){
+    digitalWrite(FAN_PIN1, LOW); //pwm = 0
+    ledcWrite(5, 0); //The LEDC channel 1 is bound to the specified left motor output PWM value of 0.
+}
+
+void alarmOn(){
+  tone(BUZZER_PIN,392);
+}
+
+void alarmOff(){
+  noTone(BUZZER_PIN);
 }
 
 void handleMessage(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data){
@@ -169,10 +210,51 @@ void handleMessage(void *handler_args, esp_event_base_t base, int32_t event_id, 
   char * message = (char *)data->data_ptr;
   if (strcmp(message,""))
   {
+
     Serial.print("Data received length : ");
     Serial.println(data->data_len);
     Serial.print("Data received : ");
     Serial.println((char *)data->data_ptr);
+
+    if (strstr(message, "VENTS") != NULL) {
+      Serial.println("VENTS TOGGLE");
+      if(strstr(message, "ON") != NULL){
+        fanOn();  
+      } else if (strstr(message, "OFF") != NULL)
+      {
+        fanOff();
+      }
+    }
+
+    if (strstr(message, "WINDOW") != NULL) {
+      Serial.println("WINDOW TOGGLE");
+      if(strstr(message, "OPEN") != NULL){
+        openWindow();  
+      } else if (strstr(message, "CLOSE") != NULL)
+      {
+        closeWindow();
+      }
+    }
+
+    if (strstr(message, "DOOR") != NULL) {
+      Serial.println("DOOR TOGGLE");
+      if(strstr(message, "OPEN") != NULL){
+        openDoor();  
+      } else if (strstr(message, "CLOSE") != NULL)
+      {
+        closeDoor();
+      }
+    }
+
+    if (strstr(message, "ALARM") != NULL) {
+      Serial.println("ALARM TOGGLE");
+      if(strstr(message, "ON") != NULL){
+        alarmOn();  
+      } else if (strstr(message, "OFF") != NULL)
+      {
+        alarmOff();
+      }
+    }
   }
 }
 
@@ -184,7 +266,7 @@ void configWebsocket(){
     wsHandler = esp_event_handler_t(handleMessage);
     
     esp_websocket_register_events(ws_cli,WEBSOCKET_EVENT_DATA, wsHandler, (void *)ws_cli);
-    
+
     String init = "BEGIN;" + WiFi.macAddress() + ";REGISTER;END";
   
     esp_websocket_client_send(ws_cli,init.c_str(),init.length(),2000);
@@ -224,7 +306,8 @@ void setup() {
   connectToWiFi(); 
   configWebsocket();
   dht_task();
-  led_task(); 	 
+  led_task();
+  keep_alive_task(); 	 
 
   strip.begin();
   strip.show();
