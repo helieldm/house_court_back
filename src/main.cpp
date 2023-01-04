@@ -7,6 +7,7 @@
 #include "DHT.h"
 #include <esp_websocket_client.h>
 #include <time.h>
+#include <vector>
 // Our classes
 #include "led.h"
 #include "myStrip.h"
@@ -30,8 +31,8 @@
 
 void destroy();
 
-const char *SSID = "Helie";
-const char *PWD = "Proutprout";
+const char *SSID = "IOT";
+const char *PWD = "40718804";
 
 const char *BEGIN = "BEGIN";
 const char *END = "END";
@@ -39,7 +40,7 @@ const char *SEP = ";";
 const char *DHT_STR = "DHT";
 
 const esp_websocket_client_config_t ws_cfg = {
-  .uri = "ws://192.168.38.244:5196",
+  .uri = "ws://192.168.0.100:5196",
   .path = "/",
   .transport = WEBSOCKET_TRANSPORT_OVER_TCP
 };
@@ -130,20 +131,30 @@ void read_dht(void * parameter) {
 
     reading = "BEGIN;"+ WiFi.macAddress() + ";DHT;" + String(humidity) + ";" + String(temperature) + ";END\0";
 
-    String door_state = flag_door ? "OPEN" : "CLOSE";
-    String door_sensor = "BEGIN;"+ WiFi.macAddress() + ";STATE;DOOR;" + door_state + ";END\0";
-
-    String WINDOW_state = flag_window ? "OPEN" : "CLOSE";
-    String WINDOW_sensor = "BEGIN;"+ WiFi.macAddress() + ";STATE;WINDOW;" + WINDOW_state + ";END\0";
-
-    String vents_state = flag_fan ? "ON" : "OFF";
-    String vents_sensor = "BEGIN;"+ WiFi.macAddress() + ";STATE;VENTS;" + vents_state + ";END\0";
-
-    String alarm_state = flag_buzzer ? "ON" : "OFF";
-    String alarm_sensor = "BEGIN;"+ WiFi.macAddress() + ";STATE;ALARM;" + alarm_state + ";END\0";
-
     // send reading to API
     esp_websocket_client_send(ws_cli,reading.c_str(),reading.length(),2000);
+
+    reading = "";
+
+    // delay the task
+    vTaskDelay(15000 / portTICK_PERIOD_MS);
+   }
+}
+
+void keep_alive(void * parameter) {
+  while(true){
+
+    String door_state = !flag_door ? "OPEN" : "CLOSE";
+    String door_sensor = "BEGIN;"+ WiFi.macAddress() + ";STATE;DOOR;" + door_state + ";END\0";
+
+    String WINDOW_state = !flag_window ? "OPEN" : "CLOSE";
+    String WINDOW_sensor = "BEGIN;"+ WiFi.macAddress() + ";STATE;WINDOW;" + WINDOW_state + ";END\0";
+
+    String vents_state = !flag_fan ? "ON" : "OFF";
+    String vents_sensor = "BEGIN;"+ WiFi.macAddress() + ";STATE;VENTS;" + vents_state + ";END\0";
+
+    String alarm_state = !flag_buzzer ? "ON" : "OFF";
+    String alarm_sensor = "BEGIN;"+ WiFi.macAddress() + ";STATE;ALARM;" + alarm_state + ";END\0";
 
     esp_websocket_client_send(ws_cli,door_sensor.c_str(),door_sensor.length(),2000);
     esp_websocket_client_send(ws_cli,WINDOW_sensor.c_str(),WINDOW_sensor.length(),2000);
@@ -154,18 +165,6 @@ void read_dht(void * parameter) {
     WINDOW_sensor = "";
     vents_sensor = "";
     alarm_sensor = "";
-    reading = "";
-
-    // delay the task
-    vTaskDelay(15000 / portTICK_PERIOD_MS);
-   }
-}
-
-void keep_alive(void * parameter) {
-  keepAlive = "BEGIN;"+ WiFi.macAddress() + ";END\0";
-  while(true){
-    Serial.println("HIHIHII : " + keepAlive);
-    esp_websocket_client_send(ws_cli,keepAlive.c_str(),keepAlive.length(),2000);
     // delay the task
      vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
@@ -431,6 +430,65 @@ void handle_message(void *handler_args, esp_event_base_t base, int32_t event_id,
       } else if (strstr(message, "OFF") != NULL)
       {
         alarm_off();
+      }
+    }
+
+    if (strstr(message, "LED") != NULL) {
+      Serial.println("LED TOGGLE");
+      char *token = strtok(message, ";");
+      int i = 0;
+      int r,g,b,a = NULL;
+      while (a == NULL)
+      {
+          i++;
+          token = strtok(NULL, ";");
+          if (strstr(token, BEGIN) == NULL && strstr(token, END) == NULL && strstr(token, WiFi.macAddress().c_str()) == NULL)
+          {
+            try
+            {
+              Serial.println(token);
+              switch (i)
+              {
+                case 2:
+                    r = atoi(token);
+                    Serial.print("Red ");
+                    Serial.println(r);
+                  break;
+                case 3:
+                    g = atoi(token);
+                    Serial.print("Green ");
+                    Serial.println(g);
+                  break;
+                case 4:
+                    b = atoi(token);
+                    Serial.print("Blue ");
+                    Serial.println(b);
+                  break;
+                case 5:
+                    a = atoi(token);
+                    Serial.print("Alpha ");
+                    Serial.println(a);
+                    if (a > 0)
+                    {
+                      strip.setBrightness(a);
+                      strip.colorWipe(strip.Color(r,g,b),10);
+                    } else
+                    {
+                      strip.clear();
+                    }
+                    a = 1;
+                    
+                    
+                  break;
+              default:
+                break;
+              }
+            }
+            catch(const std::exception& e)
+            {
+            }
+            
+          }       
       }
     }
   }
